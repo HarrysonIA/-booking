@@ -1,17 +1,20 @@
-# Un archivo docker (dockerfile) comienza siempre importanto la imagen base. 
-# Utilizamos la palabra clave 'FROM' para hacerlo.
-# En nuestro ejemplo, queremos importar la imagen de python.
-# Así que escribimos 'python' para el nombre de la imagen y 'latest' para la versión.
-FROM python:latest
+# Usa la imagen oficial de Python como base
+FROM python:3.9-slim
 
-# Para lanzar nuestro código python, debemos importarlo a nuestra imagen.
-# Utilizamos la palabra clave 'COPY' para hacerlo.
-# El primer parámetro 'main.py' es el nombre del archivo en el host.
-# El segundo parámetro '/' es la ruta donde poner el archivo en la imagen.
-# Aquí ponemos el archivo en la carpeta raíz de la imagen. 
-COPY booking/app.py /
+# Establece el directorio de trabajo en /app
+WORKDIR /app
 
-# Necesitamos definir el comando a lanzar cuando vayamos a ejecutar la imagen.
-# Utilizamos la palabra clave 'CMD' para hacerlo.
-# El siguiente comando ejecutará "python ./main.py".
-CMD [ "python", "./booking/app.py" ] 
+# Copia el archivo requirements.txt al directorio de trabajo
+COPY requirements.txt .
+
+# Instala las dependencias del proyecto
+RUN pip install -r requirements.txt
+
+# Copia el contenido de la aplicación al directorio de trabajo
+COPY . .
+
+# Expone el puerto 5000 para que la aplicación Flask pueda ser accesible desde el exterior
+EXPOSE 5000
+
+# Define el comando por defecto para ejecutar la aplicación
+CMD ["python", "main.py"]

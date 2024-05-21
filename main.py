@@ -1,3 +1,4 @@
-#!/usr/bin/env python3
+from scr.app import app
 
-print("¡Docker es mágico!")
+if __name__ == "__main__":
+    app.run(debug=True)

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, abort
 import sqlite3
 
 app = Flask(__name__)
@@ -64,6 +64,48 @@ def get_booking_by_document_number(document_number):
     booking = cursor.fetchone()
     conn.close()
     return jsonify(booking)
+@app.route('/bookings/<document_number>', methods=['PUT'])
+def update_booking(document_number):
+    data = request.get_json()
+    fullname = data.get('fullname')
+    checkin_date = data.get('checkin_date')
+    checkout_date = data.get('checkout_date')
+    price = data.get('price')
+
+    conn = sqlite3.connect('bookings.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE bookings
+        SET fullname = ?, checkin_date = ?, checkout_date = ?, price = ?
+        WHERE document_number = ?
+    ''', (fullname, checkin_date, checkout_date, price, document_number))
+    conn.commit()
+    if cursor.rowcount == 0:
+        conn.close()
+        abort(404, description="Booking not found")
+    conn.close()
+    return jsonify({
+        'fullname': fullname,
+        'checkin_date': checkin_date,
+        'checkout_date': checkout_date,
+        'price': price,
+        'document_number': document_number
+    })
+
+@app.route('/bookings/<document_number>', methods=['DELETE'])
+def delete_booking(document_number):
+    conn = sqlite3.connect('bookings.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM bookings
+        WHERE document_number = ?
+    ''', (document_number,))
+    conn.commit()
+    if cursor.rowcount == 0:
+        conn.close()
+        abort(404, description="Booking not found")
+    conn.close()
+    return jsonify({'message': 'Booking deleted successfully'})
 
 if __name__ == '__main__':
     init_db()

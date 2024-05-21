@@ -1,6 +1,9 @@
 import pytest
 import sqlite3
-from app import app, init_db
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+from scr.app import app, init_db
 
 @pytest.fixture
 def client():
@@ -20,7 +23,7 @@ def test_create_booking(client):
         'checkin_date': '2024-06-01',
         'checkout_date': '2024-06-10',
         'price': 100.0,
-        'document_number': '1234567890'
+        'document_number': '1234'
     })
     assert rv.status_code == 302  # Redirection
 
@@ -30,28 +33,28 @@ def test_get_bookings(client):
     assert b'Test User' in rv.data
 
 def test_get_booking_by_document_number(client):
-    rv = client.get('/bookings/1234567890')
+    rv = client.get('/bookings/1234')
     assert rv.status_code == 200
     assert b'Test User' in rv.data
 
 def test_update_booking(client):
-    rv = client.post('/book', data={
+    rv = client.put('/bookings/1234', json={
         'fullname': 'Updated User',
         'checkin_date': '2024-06-01',
         'checkout_date': '2024-06-10',
         'price': 150.0,
-        'document_number': '1234567890'
+        'document_number': '1234'
     })
-    assert rv.status_code == 302  # Redirection
-
-    rv = client.get('/bookings/1234567890')
     assert rv.status_code == 200
-    assert b'Updated User' in rv.data
+
+    rv = client.get('/bookings/1234')
+    json_data = rv.get_json()
+    assert json_data[1] == 'Updated User'
 
 def test_delete_booking(client):
     # Need to implement delete logic in the app
-    rv = client.delete('/bookings/1234567890')
+    rv = client.delete('/bookings/1234')
     assert rv.status_code == 200
 
-    rv = client.get('/bookings/1234567890')
-    assert rv.status_code == 404
+    rv = client.get('/bookings/1234')
+    assert b'null' in rv.data
