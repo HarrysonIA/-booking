@@ -1,11 +1,11 @@
 # Usa la imagen oficial de Python como base
-FROM python:3.9-slim
+FROM python:latest
 
 # Establece el directorio de trabajo en /app
 WORKDIR /app
 
 # Copia el archivo requirements.txt al directorio de trabajo
-COPY requirements.txt .
+COPY requirements.txt requirements.txt
 
 # Instala las dependencias del proyecto
 RUN pip install -r requirements.txt
@@ -17,4 +17,6 @@ COPY . .
 EXPOSE 5000
 
 # Define el comando por defecto para ejecutar la aplicación
-CMD ["python", "main.py"]
+# Reemplaza CMD ["python", "run.py"] con
+CMD ["python", "app.py","--host=0.0.0.0"]
+
