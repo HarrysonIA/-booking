@@ -3,10 +3,11 @@ import sqlite3
 from flask_marshmallow import Marshmallow
 from marshmallow import fields, validates, ValidationError, validate
 import re
-
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM 
+from flask_cors import CORS
 app = Flask(__name__)
 ma = Marshmallow(app)
-
+cors = CORS(app)
 # Crear la base de datos y la tabla de bookings si no existe
 def init_db():
     conn = sqlite3.connect('bookings.db')
@@ -179,6 +180,24 @@ def delete_booking(document_number):
     conn.close()
     return jsonify({'message': 'Booking deleted successfully'})
 
+@app.route('/generate', methods=['POST'])
+def generate():
+    # Cargar el modelo de generación de texto
+    # Cargar el modelo directamente
+    
+    # Obtener el mensaje del cuerpo de la solicitud
+    data = request.get_json()
+    message = data.get('message')
+
+    messages = [
+        {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
+        {"role": "user", "content": "Who are you?"},
+    ]
+    chatbot = pipeline("text-generation", model="mistralai/Mistral-7B-Instruct-v0.3")
+    chatbot(messages)
+
+    return jsonify({'response': chatbot})
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
+# Load model directly

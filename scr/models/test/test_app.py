@@ -57,4 +57,4 @@ def test_delete_booking(client):
     assert rv.status_code == 200
 
     rv = client.get('/bookings/1234567899')
-    assert b'Booking not found' in rv.data
+    assert b'Booking not found' in rv.datas
