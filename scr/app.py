@@ -3,11 +3,13 @@ import sqlite3
 from flask_marshmallow import Marshmallow
 from marshmallow import fields, validates, ValidationError, validate
 import re
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM 
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+import torch
+import torch.nn.functional as F
 from flask_cors import CORS
 app = Flask(__name__)
 ma = Marshmallow(app)
-cors = CORS(app)
+CORS(app)
 # Crear la base de datos y la tabla de bookings si no existe
 def init_db():
     conn = sqlite3.connect('bookings.db')
@@ -182,21 +184,21 @@ def delete_booking(document_number):
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    # Cargar el modelo de generación de texto
-    # Cargar el modelo directamente
-    
-    # Obtener el mensaje del cuerpo de la solicitud
     data = request.get_json()
-    message = data.get('message')
+    #pipe = pipeline("text2text-generation", model="CohereForAI/aya-101")
+    #res = pipe(data['message'])
+    
+    #checkpoint = "CohereForAI/aya-101"
 
-    messages = [
-        {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
-        {"role": "user", "content": "Who are you?"},
-    ]
-    chatbot = pipeline("text-generation", model="mistralai/Mistral-7B-Instruct-v0.3")
-    chatbot(messages)
+    #tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+    #aya_model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
 
-    return jsonify({'response': chatbot})
+    # ranslation
+    #tur_inputs = tokenizer.encode("Traduce a español: Aya cok dilli bir dil modelidir.", return_tensors="pt")
+    #tur_outputs = aya_model.generate(tur_inputs, max_new_tokens=128)
+    #return jsonify(tokenizer.decode(tur_outputs[0]))
+    #({'generated_text': message[0]['generated_text']}
+    return(data)
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
