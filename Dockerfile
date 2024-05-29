@@ -9,7 +9,7 @@ COPY requirements.txt requirements.txt
 
 # Instala las dependencias del proyecto
 RUN pip install -r requirements.txt
-
+    
 # Copia el contenido de la aplicación al directorio de trabajo
 COPY . .
 

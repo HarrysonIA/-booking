@@ -1,31 +1,21 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, abort
-import sqlite3
+# app.py
+from flask import Flask, render_template, request, jsonify, abort
+from flask_pymongo import PyMongo
 from flask_marshmallow import Marshmallow
 from marshmallow import fields, validates, ValidationError, validate
-import re
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
-import torch
-import torch.nn.functional as F
+from transformers import pipeline
 from flask_cors import CORS
+from models.txt2txtmodel import load_huggingface_model
+from bson.objectid import ObjectId
+
 app = Flask(__name__)
+app.config["MONGO_URI"] = "mongodb://localhost:27017/bookings_db"
+mongo = PyMongo(app)
 ma = Marshmallow(app)
 CORS(app)
-# Crear la base de datos y la tabla de bookings si no existe
-def init_db():
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fullname TEXT NOT NULL,
-            checkin_date TEXT NOT NULL,
-            checkout_date TEXT NOT NULL,
-            price REAL NOT NULL,
-            document_number TEXT UNIQUE NOT NULL
-        )
-    ''')
-    conn.commit()
-    conn.close()
+
+# Cargar el modelo Hugging Face una vez al inicio
+huggingface_model = load_huggingface_model()
 
 # Esquema de validación
 class BookingSchema(ma.Schema):
@@ -76,41 +66,28 @@ def book():
     except ValidationError as err:
         return jsonify(err.messages), 400
 
-    fullname = data['fullname']
-    checkin_date = data['checkin_date']
-    checkout_date = data['checkout_date']
-    price = float(data['price'])
-    document_number = data['document_number']
+    booking = {
+        'fullname': data['fullname'],
+        'checkin_date': data['checkin_date'],
+        'checkout_date': data['checkout_date'],
+        'price': data['price'],
+        'document_number': data['document_number']
+    }
     
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
     try:
-        cursor.execute('''
-            INSERT INTO bookings (fullname, checkin_date, checkout_date, price, document_number)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (fullname, checkin_date, checkout_date, price, document_number))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
-        abort(400, description="Document number already exists")
-    conn.close()
-    
-    return jsonify({
-        'fullname': fullname,
-        'checkin_date': checkin_date,
-        'checkout_date': checkout_date,
-        'price': price,
-        'document_number': document_number
-    })
+        result = mongo.db.bookings.insert_one(booking)
+        booking['_id'] = str(result.inserted_id)  # Convertir ObjectId a string
+    except Exception as e:
+        abort(400, description="Document number already exists or another database error")
+
+    return jsonify(booking)
 
 # Ruta para obtener todos los datos de bookings
 @app.route('/bookings', methods=['GET'])
 def get_bookings():
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM bookings')
-    bookings = cursor.fetchall()
-    conn.close()
+    bookings = list(mongo.db.bookings.find())
+    for booking in bookings:
+        booking['_id'] = str(booking['_id'])
     return jsonify(bookings)
 
 # Ruta para buscar un booking por document_number
@@ -119,13 +96,11 @@ def get_booking_by_document_number(document_number):
     if not document_number.isdigit() or len(document_number) != 10:
         abort(400, description="Invalid document number format")
     
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM bookings WHERE document_number = ?', (document_number,))
-    booking = cursor.fetchone()
-    conn.close()
+    booking = mongo.db.bookings.find_one({'document_number': document_number})
     if booking is None:
         return jsonify({'message': 'Booking not found'}), 404
+
+    booking['_id'] = str(booking['_id'])
     return jsonify(booking)
 
 @app.route('/bookings/<document_number>', methods=['PUT'])
@@ -139,67 +114,37 @@ def update_booking(document_number):
     except ValidationError as err:
         return jsonify(err.messages), 400
 
-    fullname = data.get('fullname')
-    checkin_date = data.get('checkin_date')
-    checkout_date = data.get('checkout_date')
-    price = data.get('price')
+    update_fields = {key: data[key] for key in data if key in ['fullname', 'checkin_date', 'checkout_date', 'price']}
 
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE bookings
-        SET fullname = ?, checkin_date = ?, checkout_date = ?, price = ?
-        WHERE document_number = ?
-    ''', (fullname, checkin_date, checkout_date, price, document_number))
-    conn.commit()
-    if cursor.rowcount == 0:
-        conn.close()
+    result = mongo.db.bookings.update_one({'document_number': document_number}, {'$set': update_fields})
+    if result.matched_count == 0:
         abort(404, description="Booking not found")
-    conn.close()
-    return jsonify({
-        'fullname': fullname,
-        'checkin_date': checkin_date,
-        'checkout_date': checkout_date,
-        'price': price,
-        'document_number': document_number
-    })
+
+    booking = mongo.db.bookings.find_one({'document_number': document_number})
+    booking['_id'] = str(booking['_id'])
+    return jsonify(booking)
 
 @app.route('/bookings/<document_number>', methods=['DELETE'])
 def delete_booking(document_number):
     if not document_number.isdigit() or len(document_number) != 10:
         abort(400, description="Invalid document number format")
 
-    conn = sqlite3.connect('bookings.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        DELETE FROM bookings
-        WHERE document_number = ?
-    ''', (document_number,))
-    conn.commit()
-    if cursor.rowcount == 0:
-        conn.close()
+    result = mongo.db.bookings.delete_one({'document_number': document_number})
+    if result.deleted_count == 0:
         abort(404, description="Booking not found")
-    conn.close()
+
     return jsonify({'message': 'Booking deleted successfully'})
 
 @app.route('/generate', methods=['POST'])
 def generate():
     data = request.get_json()
-    #pipe = pipeline("text2text-generation", model="CohereForAI/aya-101")
-    #res = pipe(data['message'])
+    message = data.get('message')
     
-    #checkpoint = "CohereForAI/aya-101"
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    
+    result = huggingface_model(message)
+    return jsonify(result[0])
 
-    #tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-    #aya_model = AutoModelForSeq2SeqLM.from_pretrained(checkpoint)
-
-    # ranslation
-    #tur_inputs = tokenizer.encode("Traduce a español: Aya cok dilli bir dil modelidir.", return_tensors="pt")
-    #tur_outputs = aya_model.generate(tur_inputs, max_new_tokens=128)
-    #return jsonify(tokenizer.decode(tur_outputs[0]))
-    #({'generated_text': message[0]['generated_text']}
-    return(data)
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)
-# Load model directly
