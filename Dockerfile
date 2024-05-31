@@ -18,5 +18,5 @@ EXPOSE 5000
 
 # Define el comando por defecto para ejecutar la aplicación
 # Reemplaza CMD ["python", "run.py"] con
-CMD ["python", "main.py"]
+CMD ["python", "scr/app.py"]
 

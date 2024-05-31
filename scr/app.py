@@ -1,4 +1,7 @@
 # app.py
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 from flask import Flask, render_template, request, jsonify, abort
 from flask_pymongo import PyMongo
 from flask_marshmallow import Marshmallow
@@ -6,6 +9,8 @@ from marshmallow import fields, validates, ValidationError, validate
 from transformers import pipeline
 from flask_cors import CORS
 from models.txt2txtmodel import load_huggingface_model
+from models.image_to_text import image_to_text
+from models.ethical_classifier import  ethical_classifier
 from bson.objectid import ObjectId
 
 app = Flask(__name__)
@@ -16,7 +21,8 @@ CORS(app)
 
 # Cargar el modelo Hugging Face una vez al inicio
 huggingface_model = load_huggingface_model()
-
+imageto_text = image_to_text()
+ethical = ethical_classifier()
 # Esquema de validación
 class BookingSchema(ma.Schema):
     fullname = fields.String(required=True, validate=[
@@ -144,6 +150,26 @@ def generate():
         return jsonify({'error': 'No message provided'}), 400
     
     result = huggingface_model(message)
+    return jsonify(result[0])
+@app.route('/image', methods=['POST'])
+def image_clasification():
+    data = request.get_json()
+    message = data.get('url')
+    
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    
+    result = imageto_text(message)
+    return jsonify(result[0])
+@app.route('/classifier', methods=['POST'])
+def ethical_classifier():
+    data = request.get_json()
+    message = data.get('message')
+    
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    
+    result = ethical(message)
     return jsonify(result[0])
 
 if __name__ == '__main__':
